@@ -483,7 +483,7 @@ html.shut #petals,html.shut #glitter{display:none}
   <div class="gan" id="gan">
     <span class="gan-light" aria-hidden="true"></span>
     <span class="gan-halo" aria-hidden="true"></span>
-    <img id="ganImg" src="assets/images/ganesha.png" alt="Lord Ganesha" width="300" height="300" decoding="async">
+    <img id="ganImg" src="ganesha.png" alt="Lord Ganesha" width="300" height="300" decoding="async">
     <p class="gan-txt" lang="sa">श्री गणेशाय नमः</p>
     <i class="gan-dot" aria-hidden="true" style="left:2%;top:34%;--dl:1.4s"></i>
     <i class="gan-dot" aria-hidden="true" style="left:96%;top:22%;--dl:2.3s"></i>
@@ -808,15 +808,22 @@ html.shut #petals,html.shut #glitter{display:none}
 
   /* ---------- Music: devotional entry plays automatically → calm loop (no mute control, by request) ---------- */
   const music = (() => {
-    const ENTRY_SRC = "assets/audio/ganesha-entry.mpeg", CALM_SRC = "assets/audio/calm-instrumental.mpeg";
+    /* looked for beside index.html first (.mp3, then .mpeg), then in assets/audio/ */
+    const paths = n => [n + ".mp3", n + ".mpeg", "assets/audio/" + n + ".mp3", "assets/audio/" + n + ".mpeg"];
+    const ENTRY_SRC = paths("ganesha-entry"), CALM_SRC = paths("calm-instrumental");
     const V_ENTRY = .45, V_CALM = .22, XF = 2.5;
     const GESTURES = ["pointerdown", "touchend", "keydown", "click"];
     let phase = "idle", ci = 0, ctx = null, unlocked = false, armed = false;
-    function mk(src, preload) {
+    function mk(srcs, preload) {
       const el = new Audio();
-      el.preload = preload; el.volume = 0; el.setAttribute("playsinline", ""); el.src = src;
-      const t = { el, g: null, v: 0, timer: 0, iv: 0, active: false, bad: false, wake: false };
-      el.addEventListener("error", () => { t.bad = true; t.active = false; });
+      el.preload = preload; el.volume = 0; el.setAttribute("playsinline", ""); el.src = srcs[0];
+      const t = { el, g: null, v: 0, timer: 0, iv: 0, active: false, bad: false, wake: false, k: 0 };
+      el.addEventListener("error", () => {
+        if (t.k < srcs.length - 1) {            /* not found / not playable here — try the next location */
+          el.src = srcs[++t.k]; el.load();
+          setTimeout(resumeWanted, 0);
+        } else { t.bad = true; t.active = false; }
+      });
       return t;
     }
     const entry = mk(ENTRY_SRC, "auto"), calm = [mk(CALM_SRC, "none"), mk(CALM_SRC, "none")], all = [entry, calm[0], calm[1]];
@@ -851,6 +858,7 @@ html.shut #petals,html.shut #glitter{display:none}
     }
     function start(t, rewind) {
       if (t.bad) return Promise.reject(new Error("audio unavailable"));
+      if (t.el.error) { t.active = false; return Promise.resolve(); }  /* a fallback location is loading; the error handler retries */
       t.active = true;
       if (rewind) { try { t.el.currentTime = 0; } catch (e) {} }
       try { const p = t.el.play(); return p && p.then ? p : Promise.resolve(); } catch (e) { return Promise.reject(e); }
@@ -932,8 +940,10 @@ html.shut #petals,html.shut #glitter{display:none}
   setInert(true);
   /* Ganesha artwork: if the licensed PNG is missing, show a traditional gold invocation instead of a broken image */
   (function ganesha() {
-    const img = $("ganImg"), miss = () => $("gan").classList.add("missing");
-    if (img.complete && !img.naturalWidth) miss(); else img.addEventListener("error", miss, { once: true });
+    const img = $("ganImg"), alt = ["assets/images/ganesha.png"];
+    const next = () => { if (alt.length) img.src = alt.shift(); else { img.removeEventListener("error", next); $("gan").classList.add("missing"); } };
+    img.addEventListener("error", next);
+    if (img.complete && !img.naturalWidth) next();
   })();
   function burst() {
     const b = $("burst"), u = $("burst2"), n = 12;
